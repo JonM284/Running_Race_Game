@@ -1,7 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using Rewired;
 
 
 //[RequireComponent()]
@@ -41,10 +40,8 @@ public class WalkingBeahaviour : MonoBehaviour {
     //rewired stuff
     
     
-    [Header("Rewired")]
-    [Tooltip("Identification number of this player, to be used to find specified inputs.")]
-    public int playerID;
-    private Player myPlayer;
+    
+    
 
     //variables for Sphere cast
     [Header("SphereCast Variables")]
@@ -61,7 +58,7 @@ public class WalkingBeahaviour : MonoBehaviour {
     public LayerMask layerMask;
     private Vector3 m_Right_Side_Ray_Dir, m_Left_Side_Ray_Dir, wall_Normal, Movement_Sphere_Pos, respawn_Pos;
 
-    private Shooting_Behaviour shoot_Behave;
+    
 
     public enum Player_Weight
     {
@@ -75,11 +72,11 @@ public class WalkingBeahaviour : MonoBehaviour {
 	void Start () {
         //rb = GetComponent<Rigidbody>();
         char_Controller = GetComponent<CharacterController>();
-        myPlayer = ReInput.players.GetPlayer(playerID);
+        
         wall_Scale_Padding_Time_Max = wall_Scale_Padding_Time;
         Movement_Sphere_Pos = new Vector3(transform.position.x, transform.position.y - 0.7f, transform.position.z);
         respawn_Pos = new Vector3(transform.position.x, transform.position.y + 2f, transform.position.z);
-        shoot_Behave = GetComponent<Shooting_Behaviour>();
+        
     }
 	
 	// Update is called once per frame
@@ -133,17 +130,9 @@ public class WalkingBeahaviour : MonoBehaviour {
         
 
         if (isGrounded) {
-            if (myPlayer.GetButton("Sprint") && m_can_Sprint && Input.GetKey(KeyCode.W) 
-                && !shoot_Behave.Is_Meleeing)
-            {
-                m_Is_Sprinting = true;
-            }
+            
         }
-        if (myPlayer.GetButtonUp("Sprint") || Input.GetKeyUp(KeyCode.W) || Input.GetMouseButton(0) 
-            || shoot_Behave.Is_Meleeing)
-        {
-            m_Is_Sprinting = false;
-        }
+        
 
 
         if ((Input.GetKey(KeyCode.W)|| Input.GetKey(KeyCode.S)|| Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.D)) &&
@@ -251,7 +240,7 @@ public class WalkingBeahaviour : MonoBehaviour {
                 {
                     StartCoroutine(Off_Wall_Run_Padding());
                     WallJump();
-                    GetComponent<FPSMouseCameraFollow>().Reset_Timer();
+                    
                     Jump_Away_From_Wall(m_Running_Along_Right_Wall);
                     is_Wall_Running = false;
 
