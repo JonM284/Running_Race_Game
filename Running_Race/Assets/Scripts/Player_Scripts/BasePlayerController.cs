@@ -4,10 +4,12 @@ using UnityEngine;
 
 public class BasePlayerController : MonoBehaviour {
 
-    protected Transform firstPerson_View;
-    protected Transform firstPerson_Camera;
+    public Transform firstPerson_View;
+    public Transform firstPerson_Camera;
+    public Transform peek_Vision_X_Rotator;
 
-    protected Vector3 firstPerson_View_Rotation = new Vector3 (0,0,0);
+    protected Vector3 firstPerson_View_Rotation = new Vector3(0, 0, 0);
+    protected Vector3 original_Peek_Vision_Pos;
 
     public float walkSpeed = 6.75f;
     public float runSpeed = 10f;
@@ -23,13 +25,19 @@ public class BasePlayerController : MonoBehaviour {
     public float wall_Climb_Jump_Force;
 
     private float m_Current_Wall_Climb_Timer, m_Climb_Constant_Push_Original;
-    private bool m_Can_Do_Advanced_Movements = false , m_Is_Climbing_Wall = false;
+    private bool m_Can_Do_Advanced_Movements = false, m_Is_Climbing_Wall = false;
 
     [Header("Advanced movement raycast values")]
     public float front_Wall_SphereCast_Dist;
     public float front_Wall_SphereCast_Rad;
 
-    protected float speed;
+    //Hiding values
+    private bool can_Hide, can_Knockout, can_Peek;
+    //current action values
+    private bool m_Is_Hiding, m_Is_Peeking;
+    private Transform m_Hiding_Object;
+
+    protected float speed, original_Speed;
 
     protected bool isMoving, isCrouching, isGrounded, isSprinting, is_Leaning, is_Leaning_Right;
 
@@ -44,9 +52,9 @@ public class BasePlayerController : MonoBehaviour {
     protected float antiBumpFactor = 0.75f;
 
     protected CharacterController charController;
-    protected Vector3 moveDirection = new Vector3(0,0,0);
+    protected Vector3 moveDirection = new Vector3(0, 0, 0);
     private Vector3 m_Current_Wall_Norm = Vector3.zero;
-    
+
     private float L_Lean_Pos_X, R_Lean_Pos_X;
 
     public LayerMask groundLayer, Wall_Layer;
@@ -55,14 +63,16 @@ public class BasePlayerController : MonoBehaviour {
     protected Vector3 default_CamPos, New_Cam_Pos = Vector3.zero;
     protected float camHeight;
 
-    
-    
-	// Use this for initialization
-	void Start () {
+
+
+    // Use this for initialization
+    void Start() {
         //transform.Find() = looks for specific object ONLY in the children of this gameobject NOT the whole hierarchy
+
         
-        firstPerson_Camera = transform.GetChild(0).transform;
-        firstPerson_View = firstPerson_Camera.transform.Find("FPS View").transform;
+        
+        peek_Vision_X_Rotator.GetComponent<FPSMouseCameraFollow>().enabled = false;
+        original_Peek_Vision_Pos = peek_Vision_X_Rotator.localPosition;
         charController = GetComponent<CharacterController>();
         speed = walkSpeed;
         isMoving = false;
@@ -73,14 +83,15 @@ public class BasePlayerController : MonoBehaviour {
         default_ControllerHeight = charController.height;
         default_CamPos = firstPerson_Camera.localPosition;
         New_Cam_Pos = firstPerson_Camera.localPosition;
-	}
-	
-	// Update is called once per frame
-	void Update () {
+    }
+
+    // Update is called once per frame
+    void Update() {
         Player_Inputs();
         PlayerMovement();
         Advanced_Movements();
-       
+        Check_Interactables();
+
     }
 
     protected void PlayerMovement()
@@ -97,6 +108,10 @@ public class BasePlayerController : MonoBehaviour {
         {
             Can_Run = false;
             speed = crouchSpeed;
+        }else if (m_Is_Hiding || m_Is_Peeking)
+        {
+            Can_Run = false;
+            speed = 0;
         }
         else
         {
@@ -111,12 +126,12 @@ public class BasePlayerController : MonoBehaviour {
 
             moveDirection = transform.TransformDirection(moveDirection) * speed;
 
-            PlayerJump();
+            
             if (m_Can_Do_Advanced_Movements)
             {
                 m_Can_Do_Advanced_Movements = false;
             }
-        }else
+        } else
         {
             m_Can_Do_Advanced_Movements = true;
         }
@@ -125,11 +140,13 @@ public class BasePlayerController : MonoBehaviour {
             moveDirection.y -= gravity * Time.deltaTime;
         }
 
-        isGrounded = (charController.Move(moveDirection * Time.deltaTime) & CollisionFlags.Below) != 0 ;
+        isGrounded = (charController.Move(moveDirection * Time.deltaTime) & CollisionFlags.Below) != 0;
 
         isMoving = charController.velocity.magnitude > 0.15f;
 
     }
+
+    
 
     void Advanced_Movements()
     {
@@ -152,7 +169,7 @@ public class BasePlayerController : MonoBehaviour {
 
     protected void Player_Inputs()
     {
-        // these are specified controls
+        // Vertical Movement
         if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.S))
         {
             if (Input.GetKey(KeyCode.W))
@@ -171,6 +188,7 @@ public class BasePlayerController : MonoBehaviour {
             inputY_Set = 0;
         }
 
+        //Horizontal Movement
         if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.D))
         {
             if (Input.GetKey(KeyCode.A))
@@ -187,7 +205,8 @@ public class BasePlayerController : MonoBehaviour {
             inputX_Set = 0;
         }
 
-        if (Input.GetKeyDown(KeyCode.C))
+        //Check crouching
+        if (Input.GetKeyDown(KeyCode.C) && !m_Is_Hiding && !m_Is_Peeking)
         {
             if (isCrouching && CanGetUp())
             {
@@ -201,7 +220,8 @@ public class BasePlayerController : MonoBehaviour {
             }
         }
 
-        if (Input.GetKeyDown(KeyCode.E) && (!is_Leaning || !is_Leaning_Right) && Can_Lean_Right())
+        //Lean Camera
+        if ((Input.GetKeyDown(KeyCode.E) && (!is_Leaning || !is_Leaning_Right) && Can_Lean_Right()) && !m_Is_Hiding && !m_Is_Peeking)
         {
             is_Leaning = true;
             StartCoroutine(Lean_Camera(true));
@@ -212,7 +232,7 @@ public class BasePlayerController : MonoBehaviour {
             StartCoroutine(Reset_Cam_Lean());
             
         }
-        else if (Input.GetKeyDown(KeyCode.Q) && (!is_Leaning || is_Leaning_Right) && Can_Lean_Left())
+        else if ((Input.GetKeyDown(KeyCode.Q) && (!is_Leaning || is_Leaning_Right) && Can_Lean_Left()) && !m_Is_Hiding && !m_Is_Peeking)
         {
             is_Leaning = true;
             StartCoroutine(Lean_Camera(false));
@@ -229,6 +249,43 @@ public class BasePlayerController : MonoBehaviour {
             StartCoroutine(Reset_Cam_Lean());
         }
 
+        Debug.Log($"Can hide: {can_Hide}");
+
+        //Use
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            if (can_Knockout)
+            {
+
+            }else if (can_Peek && !m_Is_Peeking)
+            {
+                if (is_Leaning)
+                {
+                    is_Leaning = false;
+                    StartCoroutine(Reset_Cam_Lean());
+                }
+                Do_Peeking();
+                Debug.Log("Called peeking");
+            }
+            else if (can_Hide && !m_Is_Hiding)
+            {
+                if (is_Leaning)
+                {
+                    is_Leaning = false;
+                    StartCoroutine(Reset_Cam_Lean());
+                }
+                Do_Hiding();
+                Debug.Log("Called hiding");
+            }else if (m_Is_Hiding)
+            {
+                Reset_Hiding();
+            }else if (m_Is_Peeking)
+            {
+                Reset_Peeking();
+            }
+        }
+
+        //Sprint
         if (Input.GetKey(KeyCode.LeftShift))
         {
             if (is_Leaning)
@@ -251,9 +308,36 @@ public class BasePlayerController : MonoBehaviour {
         }
     }
 
-    
 
-   
+    protected void Check_Interactables()
+    {
+        RaycastHit hit;
+
+        if(Physics.SphereCast(firstPerson_Camera.position, front_Wall_SphereCast_Rad, firstPerson_Camera.forward, out hit, front_Wall_SphereCast_Dist))
+        {
+            if (hit.collider.tag == "Player")
+            {
+
+            }
+            else if (hit.collider.tag == "Hiding_Place")
+            {
+                can_Hide = true;
+                m_Hiding_Object = hit.transform;
+                Debug.Log($"Can hide in: {hit.collider.name}");
+            }
+            else if (hit.collider.tag == "Door")
+            {
+                can_Peek = true;
+                m_Hiding_Object = hit.transform;
+            }
+
+        }else{
+            can_Hide = false;
+            can_Peek = false;
+            if(m_Hiding_Object != null && !m_Is_Hiding) m_Hiding_Object = null;
+        }
+    }
+
 
     protected bool CanGetUp()
     {
@@ -339,6 +423,66 @@ public class BasePlayerController : MonoBehaviour {
         moveDirection = transform.TransformDirection(moveDirection) + (normal * wall_Climb_Jump_Force); 
     }
 
+    protected void Do_Peeking()
+    {
+        m_Is_Peeking = true;
+        charController.enabled = false;
+        GetComponent<FPSMouseCameraFollow>().enabled = false;
+        
+        int other_Side_Door = 0;
+        if (m_Hiding_Object.GetComponent<Hiding_Place_Var>().Hiding_Place_Camera_Pos.Length > 1)
+        {
+            float mag1 = Vector3.Distance(m_Hiding_Object.GetComponent<Hiding_Place_Var>().Hiding_Place_Camera_Pos[0].position, transform.position);
+            float mag2 = Vector3.Distance(m_Hiding_Object.GetComponent<Hiding_Place_Var>().Hiding_Place_Camera_Pos[1].position , transform.position);
+            if (mag1 > mag2)
+            {
+                other_Side_Door = 0;
+            }else
+            {
+                other_Side_Door = 1;
+            }
+
+        }
+        //peek_Vision_X_Rotator.forward = m_Hiding_Object.GetComponent<Hiding_Place_Var>().Hiding_Place_Camera_Pos[other_Side_Door].forward;
+        peek_Vision_X_Rotator.position = m_Hiding_Object.GetComponent<Hiding_Place_Var>().Hiding_Place_Camera_Pos[other_Side_Door].position;
+        peek_Vision_X_Rotator.GetComponent<FPSMouseCameraFollow>().enabled = true;
+        peek_Vision_X_Rotator.GetComponent<FPSMouseCameraFollow>().Limit_Vision_Movement_Range(m_Hiding_Object.GetComponent<Hiding_Place_Var>().Hiding_Place_Camera_Pos[other_Side_Door], m_Hiding_Object.GetComponent<Hiding_Place_Var>().Limit_X_Amount, m_Hiding_Object.GetComponent<Hiding_Place_Var>().Limit_Y_Amount, false);
+        firstPerson_Camera.GetComponent<FPSMouseCameraFollow>().Limit_Vision_Movement_Range(m_Hiding_Object.GetComponent<Hiding_Place_Var>().Hiding_Place_Camera_Pos[other_Side_Door], m_Hiding_Object.GetComponent<Hiding_Place_Var>().Limit_X_Amount, m_Hiding_Object.GetComponent<Hiding_Place_Var>().Limit_Y_Amount, false);
+    }
+
+    protected void Reset_Peeking()
+    {
+        m_Is_Peeking = false;
+        peek_Vision_X_Rotator.GetComponent<FPSMouseCameraFollow>().enabled = false;
+        peek_Vision_X_Rotator.localPosition = original_Peek_Vision_Pos;
+        peek_Vision_X_Rotator.localRotation = Quaternion.Euler(original_Peek_Vision_Pos);
+        charController.enabled = true;
+        GetComponent<FPSMouseCameraFollow>().enabled = true;
+        GetComponent<FPSMouseCameraFollow>().Reset_Vision_Movement_Range();
+        firstPerson_Camera.GetComponent<FPSMouseCameraFollow>().Reset_Vision_Movement_Range();
+    }
+
+    protected void Do_Hiding()
+    {
+        m_Is_Hiding = true;
+        charController.enabled = false;
+        transform.position = m_Hiding_Object.transform.position;
+        transform.forward = m_Hiding_Object.forward;
+        firstPerson_Camera.forward = m_Hiding_Object.forward;
+        firstPerson_Camera.transform.position = m_Hiding_Object.GetComponent<Hiding_Place_Var>().Hiding_Place_Camera_Pos[0].position;
+        GetComponent<FPSMouseCameraFollow>().Limit_Vision_Movement_Range(m_Hiding_Object, m_Hiding_Object.GetComponent<Hiding_Place_Var>().Limit_X_Amount, m_Hiding_Object.GetComponent<Hiding_Place_Var>().Limit_Y_Amount, true);
+        firstPerson_Camera.GetComponent<FPSMouseCameraFollow>().Limit_Vision_Movement_Range(m_Hiding_Object, m_Hiding_Object.GetComponent<Hiding_Place_Var>().Limit_X_Amount, m_Hiding_Object.GetComponent<Hiding_Place_Var>().Limit_Y_Amount, true);
+    }
+
+    protected void Reset_Hiding()
+    {
+        m_Is_Hiding = false;
+        transform.position = m_Hiding_Object.transform.position + (transform.forward * 2f);
+        charController.enabled = true;
+        GetComponent<FPSMouseCameraFollow>().Reset_Vision_Movement_Range();
+        firstPerson_Camera.GetComponent<FPSMouseCameraFollow>().Reset_Vision_Movement_Range();
+    }
+
     protected bool Wall_In_Front()
     {
         RaycastHit hit;
@@ -373,7 +517,7 @@ public class BasePlayerController : MonoBehaviour {
 
     private void OnDrawGizmos()
     {
-        Gizmos.DrawWireSphere((transform.position + (transform.forward * front_Wall_SphereCast_Dist)), front_Wall_SphereCast_Rad);
+        Gizmos.DrawWireSphere((firstPerson_Camera.position + (firstPerson_Camera.forward * front_Wall_SphereCast_Dist)), front_Wall_SphereCast_Rad);
     }
 
 }

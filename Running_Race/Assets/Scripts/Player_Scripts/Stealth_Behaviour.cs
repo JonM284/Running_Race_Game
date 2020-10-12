@@ -8,5 +8,6 @@ public class Stealth_Behaviour : BasePlayerController
     {
         Player_Inputs();
         PlayerMovement();
+        Check_Interactables();
     }
 }

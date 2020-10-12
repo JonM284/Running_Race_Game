@@ -18,13 +18,17 @@ public class FPSMouseCameraFollow : MonoBehaviour {
     [HideInInspector]
     public float rotation_X, rotation_Y;
 
+    public float additive_X, additive_Y;
+
     private float minimum_X = -360f;
     private float maximum_X = 360f;
 
     private float minimum_Y = -89f;
     private float maximum_Y = 89f;
 
-    private Quaternion originalRotation;
+    public float[] original_Rotation_Min_Max = new float[2];
+
+    private Quaternion originalRotation, current_Norm_Rotation;
 
     private float mouseSensivity = 1.7f;
 
@@ -39,8 +43,12 @@ public class FPSMouseCameraFollow : MonoBehaviour {
     // Use this for initialization
     void Start () {
         originalRotation = transform.rotation;
+        current_Norm_Rotation = originalRotation;
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+
+        original_Rotation_Min_Max[0] = maximum_X;
+        original_Rotation_Min_Max[1] = maximum_Y;
         
     }
 
@@ -95,11 +103,11 @@ public class FPSMouseCameraFollow : MonoBehaviour {
         {
             rotation_X += Input.GetAxis("Mouse X") * sensivity_X;
 
-            rotation_X = ClampAngle(rotation_X, minimum_X, maximum_X);
+            rotation_X = ClampAngle(rotation_X, minimum_X + additive_X, maximum_X + additive_X);
             Quaternion xQuaternion = Quaternion.AngleAxis(rotation_X, Vector3.up);
             
 
-            transform.localRotation = originalRotation * xQuaternion;
+            transform.localRotation = current_Norm_Rotation * xQuaternion;
         }
 
         if (axes == RotationAxes.MouseY && !camera_Is_Tilted)
@@ -109,12 +117,34 @@ public class FPSMouseCameraFollow : MonoBehaviour {
             rotation_Y = ClampAngle(rotation_Y, minimum_Y, maximum_Y);
             Quaternion yQuaternion = Quaternion.AngleAxis(-rotation_Y, Vector3.right);
 
-            transform.localRotation = originalRotation * yQuaternion;
+            transform.localRotation = current_Norm_Rotation * yQuaternion;
         }
 
         
             
         
+    }
+
+    public void Limit_Vision_Movement_Range(Transform _hiding_Object, float _limit_X, float _limit_Y, bool _Hiding)
+    {
+        minimum_X = -_limit_X;
+        maximum_X = _limit_X;
+        minimum_Y = -_limit_Y;
+        maximum_Y = _limit_Y;
+        //current_Norm_Rotation = _hiding_Object.rotation;
+        additive_X = _Hiding ? _hiding_Object.rotation.eulerAngles.y : 0;
+       //additive_X = _hiding_Object.rotation.eulerAngles.y;
+        
+    }
+
+    public void Reset_Vision_Movement_Range()
+    {
+        minimum_X = -original_Rotation_Min_Max[0];
+        maximum_X = original_Rotation_Min_Max[0];
+        minimum_Y = -original_Rotation_Min_Max[1];
+        maximum_Y = original_Rotation_Min_Max[1];
+        //current_Norm_Rotation = originalRotation;
+        additive_X = 0;
     }
 
     
